@@ -1,0 +1,14 @@
+name: network_control_center
+description: Network Control Center mobile client
+publish_to: none
+version: 1.0.0+1
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  flutter_secure_storage: ^9.2.2
+  local_auth: ^2.3.0
+flutter:
+  uses-material-design: true

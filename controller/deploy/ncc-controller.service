@@ -1,0 +1,18 @@
+[Unit]
+Description=Network Control Center Controller
+After=network.target
+
+[Service]
+Type=simple
+User=ncc
+Group=ncc
+EnvironmentFile=/etc/ncc.env
+WorkingDirectory=/opt/ncc/controller
+ExecStart=/opt/ncc/controller/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,45 @@
+name: Build Android APK
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/build-android.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Create Android project
+        run: flutter create --platforms=android --project-name network_control_center app
+      - name: Install application source
+        run: |
+          cp mobile/lib/main.dart app/lib/main.dart
+          cp mobile/pubspec.yaml app/pubspec.yaml
+          python3 - <<'PY'
+          from pathlib import Path
+          f=Path('app/android/app/src/main/AndroidManifest.xml')
+          s=f.read_text()
+          s=s.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
+          f.write_text(s)
+          PY
+      - name: Fetch dependencies
+        working-directory: app
+        run: flutter pub get
+      - name: Validate Dart code
+        working-directory: app
+        run: flutter analyze lib/main.dart
+      - name: Build installable APK
+        working-directory: app
+        run: flutter build apk --release
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Network-Control-Center-APK
+          path: app/build/app/outputs/flutter-apk/app-release.apk
