@@ -26,7 +26,8 @@ jobs:
           from pathlib import Path
           f=Path('app/android/app/src/main/AndroidManifest.xml')
           s=f.read_text()
-          s=s.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
+          if 'android.permission.INTERNET' not in s:
+              s=s.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
           f.write_text(s)
           PY
       - name: Fetch dependencies
@@ -41,5 +42,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Network-Control-Center-APK
+          name: Network_Control_Center_V3_APK
           path: app/build/app/outputs/flutter-apk/app-release.apk

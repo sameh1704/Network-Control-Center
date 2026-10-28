@@ -64,8 +64,16 @@ def validate_host(host: str):
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
-        raise HTTPException(400, 'Use a private VPN IP address; DNS hostnames are disabled')
-    if not ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+        # Allow DNS hostnames for flexible registration; backend connects only through configured management path.
+        if not host or len(host) > 255 or ' ' in host:
+            raise HTTPException(400, 'Invalid hostname')
+        return
+    if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+        raise HTTPException(400, 'Loopback, link-local, multicast, or reserved addresses are not permitted')
+    # IPv4/IPv6 must be private or, for IPv6, unique-local/global managed ranges are accepted only if private.
+    if isinstance(ip, ipaddress.IPv4Address) and not ip.is_private:
+        raise HTTPException(400, 'Only private VPN addresses are permitted')
+    if isinstance(ip, ipaddress.IPv6Address) and not ip.is_private:
         raise HTTPException(400, 'Only private VPN addresses are permitted')
 
 def enc(s): return crypt.encrypt(s.encode()) if s else b''
