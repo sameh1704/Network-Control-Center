@@ -94,7 +94,8 @@ void main() {
 
   testWidgets('VM card renders in RTL directionality', (WidgetTester tester) async {
     await pumpCard(tester, vm: _vm(state: 'off'));
-    expect(find.byType(Directionality), findsOneWidget);
+    final title = tester.element(find.text('Ubuntu-01'));
+    expect(Directionality.of(title), TextDirection.rtl);
     expect(find.text('Powered Off'), findsOneWidget);
   });
 }
