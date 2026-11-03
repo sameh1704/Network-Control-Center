@@ -100,8 +100,8 @@ String vmStateLabel(String s) {
 Widget _vmActions(Device host, Vm vm, Future<void> Function(Device, Vm, String) onCommand, bool busy) {
   final children = <Widget>[];
   if (busy) {
-    children.add(const SizedBox(width: 20, height: 20, child: const CircularProgressIndicator()));
-    children.add(const Text('جاري التنفيذ...', style: const TextStyle(fontSize: 12)));
+    children.add(const SizedBox(width: 20, height: 20, child: CircularProgressIndicator()));
+    children.add(const Text('جاري التنفيذ...', style: TextStyle(fontSize: 12)));
     return Wrap(spacing: 8, runSpacing: 8, children: children);
   }
   if (vm.state == 'off') {
@@ -124,14 +124,14 @@ Widget _vmActions(Device host, Vm vm, Future<void> Function(Device, Vm, String) 
         label: const Text('إيقاف آمن'),
       ));
     } else {
-      children.add(Padding(
+      children.add(const Padding(
         padding: const EdgeInsets.only(top: 4),
-        child: Text('VMware Tools غير متاح: إعادة التشغيل/الإيقاف الآمن معطل', style: const TextStyle(fontSize: 11, color: Colors.amber)),
+        child: Text('VMware Tools غير متاح: إعادة التشغيل/الإيقاف الآمن معطل', style: TextStyle(fontSize: 11, color: Colors.amber)),
       ));
     }
   }
   if (vm.state == 'suspended') {
-    children.add(const Text('لا يمكن تنفيذ أوامر الطاقة في حالة التعليق', style: const TextStyle(fontSize: 11, color: Colors.amber)));
+    children.add(const Text('لا يمكن تنفيذ أوامر الطاقة في حالة التعليق', style: TextStyle(fontSize: 11, color: Colors.amber)));
   }
   return Wrap(spacing: 8, runSpacing: 8, children: children);
 }
@@ -175,7 +175,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Device> devices = [];
   List<Map<String, dynamic>> pending = [];
   bool busy = false;
-  Map<String, bool> _vmBusy = {};
+  final Map<String, bool> _vmBusy = {};
   Timer? timer;
   bool appLock = false;
   bool unlocked = true;
@@ -339,7 +339,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final c = client;
     final edited = await showDialog<DeviceFormData>(
       context: context,
-      builder: (ctx) => DeviceFormDialog(initial: null),
+      builder: (ctx) => const DeviceFormDialog(initial: null),
     );
     if (edited == null) return;
     final payload = edited.toPayload();
