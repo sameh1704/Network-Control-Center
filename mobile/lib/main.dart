@@ -125,7 +125,7 @@ Widget _vmActions(Device host, Vm vm, Future<void> Function(Device, Vm, String) 
       ));
     } else {
       children.add(const Padding(
-        padding: const EdgeInsets.only(top: 4),
+        padding: EdgeInsets.only(top: 4),
         child: Text('VMware Tools غير متاح: إعادة التشغيل/الإيقاف الآمن معطل', style: TextStyle(fontSize: 11, color: Colors.amber)),
       ));
     }
