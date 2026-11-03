@@ -59,8 +59,15 @@ jobs:
           test -f "$release_apk"
 
           certificate_sha256() {
-            "$apksigner" verify --print-certs "$1" \
-              | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+            local output
+            if ! output="$("$apksigner" verify --print-certs "$1" 2>&1)"; then
+              printf '%s\n' "$output" >&2
+              return 1
+            fi
+            printf '%s\n' "$output" \
+              | grep -E '^Signer #1 certificate (DN|SHA-256 digest|SHA-1 digest):' >&2 || true
+            printf '%s\n' "$output" \
+              | sed -nE 's/^Signer #1 certificate SHA-256 digest:[[:space:]]*//p' \
               | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]'
           }
           reference_certificate="$(certificate_sha256 "$reference_apk")"
