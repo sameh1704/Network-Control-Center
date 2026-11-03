@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -34,6 +35,61 @@ jobs:
       - name: Build release APK
         working-directory: mobile
         run: flutter build apk --release
+      - name: Download installed-release reference APK
+        uses: actions/download-artifact@v4
+        with:
+          name: Network_Control_Center_V3_APK
+          run-id: 40682665914
+          repository: ${{ github.repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: reference-apk
+      - name: Verify upgrade signing identity and package version
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          build_tools="$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          apksigner="$build_tools/apksigner"
+          aapt="$build_tools/aapt"
+          reference_apk="../reference-apk/app-release.apk"
+          release_apk="build/app/outputs/flutter-apk/app-release.apk"
+          test -x "$apksigner"
+          test -x "$aapt"
+          test -f "$reference_apk"
+          test -f "$release_apk"
+
+          certificate_sha256() {
+            "$apksigner" verify --print-certs "$1" \
+              | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+              | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]'
+          }
+          reference_certificate="$(certificate_sha256 "$reference_apk")"
+          release_certificate="$(certificate_sha256 "$release_apk")"
+          test -n "$reference_certificate"
+          test -n "$release_certificate"
+          printf 'Reference signer SHA-256: %s\n' "$reference_certificate"
+          printf 'Release signer SHA-256:   %s\n' "$release_certificate"
+          if [[ "$reference_certificate" != "$release_certificate" ]]; then
+            echo 'Release signing certificate does not match the installed-release reference.' >&2
+            exit 1
+          fi
+
+          reference_badging="$("$aapt" dump badging "$reference_apk" | grep '^package:')"
+          release_badging="$("$aapt" dump badging "$release_apk" | grep '^package:')"
+          reference_package="$(printf '%s\n' "$reference_badging" | cut -d "'" -f 2)"
+          reference_code="$(printf '%s\n' "$reference_badging" | cut -d "'" -f 4)"
+          release_package="$(printf '%s\n' "$release_badging" | cut -d "'" -f 2)"
+          release_code="$(printf '%s\n' "$release_badging" | cut -d "'" -f 4)"
+          expected_package='com.example.network_control_center'
+          printf 'Reference package/versionCode: %s / %s\n' "$reference_package" "$reference_code"
+          printf 'Release package/versionCode:   %s / %s\n' "$release_package" "$release_code"
+          test "$reference_package" = "$expected_package"
+          test "$release_package" = "$expected_package"
+          [[ "$reference_code" =~ ^[0-9]+$ && "$release_code" =~ ^[0-9]+$ ]]
+          if (( release_code <= reference_code )); then
+            echo 'Release versionCode must be higher than the installed-release reference.' >&2
+            exit 1
+          fi
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
