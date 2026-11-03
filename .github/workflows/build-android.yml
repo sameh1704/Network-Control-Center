@@ -16,31 +16,26 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Create Android project
-        run: flutter create --platforms=android --project-name network_control_center app
-      - name: Install application source
-        run: |
-          cp mobile/lib/main.dart app/lib/main.dart
-          cp mobile/pubspec.yaml app/pubspec.yaml
-          python3 - <<'PY'
-          from pathlib import Path
-          f=Path('app/android/app/src/main/AndroidManifest.xml')
-          s=f.read_text()
-          if 'android.permission.INTERNET' not in s:
-              s=s.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
-          f.write_text(s)
-          PY
       - name: Fetch dependencies
-        working-directory: app
+        working-directory: mobile
         run: flutter pub get
       - name: Validate Dart code
-        working-directory: app
-        run: flutter analyze lib/main.dart
-      - name: Build installable APK
-        working-directory: app
+        working-directory: mobile
+        run: flutter analyze
+      - name: Run Flutter tests
+        working-directory: mobile
+        run: flutter test
+      - name: Prepare Android Gradle wrapper
+        run: |
+          flutter create --platforms=android --project-name network_control_center --org com.example "$RUNNER_TEMP/ncc-android-wrapper"
+          cp "$RUNNER_TEMP/ncc-android-wrapper/android/gradlew" mobile/android/gradlew
+          cp "$RUNNER_TEMP/ncc-android-wrapper/android/gradle/wrapper/gradle-wrapper.jar" mobile/android/gradle/wrapper/gradle-wrapper.jar
+          chmod +x mobile/android/gradlew
+      - name: Build release APK
+        working-directory: mobile
         run: flutter build apk --release
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Network_Control_Center_V3_APK
-          path: app/build/app/outputs/flutter-apk/app-release.apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk

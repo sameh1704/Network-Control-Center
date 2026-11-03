@@ -71,8 +71,99 @@ class ApiClient {
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+Color vmStateColor(String s) {
+  if (s == 'on') return Colors.greenAccent;
+  if (s == 'off') return Colors.redAccent;
+  if (s == 'suspended') return Colors.amberAccent;
+  return Colors.amberAccent;
+}
+
+IconData vmStateIcon(String s) {
+  if (s == 'on') return Icons.power;
+  if (s == 'off') return Icons.power_off;
+  if (s == 'suspended') return Icons.pause;
+  return Icons.help_outline;
+}
+
+String vmStateLabel(String s) {
+  if (s == 'on') return 'Powered On';
+  if (s == 'off') return 'Powered Off';
+  if (s == 'suspended') return 'Suspended';
+  return 'Unknown';
+}
+
+Widget _vmActions(Device host, Vm vm, Future<void> Function(Device, Vm, String) onCommand, bool busy) {
+  final children = <Widget>[];
+  if (busy) {
+    children.add(const SizedBox(width: 20, height: 20, child: const CircularProgressIndicator()));
+    children.add(const Text('جاري التنفيذ...', style: const TextStyle(fontSize: 12)));
+    return Wrap(spacing: 8, runSpacing: 8, children: children);
+  }
+  if (vm.state == 'off') {
+    children.add(FilledButton.icon(
+      onPressed: () => onCommand(host, vm, 'power_on'),
+      icon: const Icon(Icons.power_settings_new),
+      label: const Text('تشغيل'),
+    ));
+  }
+  if (vm.state == 'on') {
+    if (vm.tools == 'guestToolsRunning') {
+      children.add(OutlinedButton.icon(
+        onPressed: () => onCommand(host, vm, 'reboot_guest'),
+        icon: const Icon(Icons.restart_alt),
+        label: const Text('إعادة تشغيل'),
+      ));
+      children.add(OutlinedButton.icon(
+        onPressed: () => onCommand(host, vm, 'shutdown_guest'),
+        icon: const Icon(Icons.power_off),
+        label: const Text('إيقاف آمن'),
+      ));
+    } else {
+      children.add(Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text('VMware Tools غير متاح: إعادة التشغيل/الإيقاف الآمن معطل', style: const TextStyle(fontSize: 11, color: Colors.amber)),
+      ));
+    }
+  }
+  if (vm.state == 'suspended') {
+    children.add(const Text('لا يمكن تنفيذ أوامر الطاقة في حالة التعليق', style: const TextStyle(fontSize: 11, color: Colors.amber)));
+  }
+  return Wrap(spacing: 8, runSpacing: 8, children: children);
+}
+
+Widget vmCard(Device host, Vm vm, {required bool busy, required Future<void> Function(Device, Vm, String) onCommand}) {
+  return Card(
+    margin: const EdgeInsets.symmetric(vertical: 6),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          leading: Icon(vmStateIcon(vm.state), color: vmStateColor(vm.state)),
+          title: Text(
+            vm.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            softWrap: true,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          subtitle: Text('${vm.guest} · ${vmStateLabel(vm.state)} · Tools: ${vm.tools}'),
+          trailing: Text(vmStateLabel(vm.state),
+              style: TextStyle(color: vmStateColor(vm.state), fontWeight: FontWeight.bold)),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: _vmActions(host, vm, onCommand, busy),
+        ),
+      ],
+    ),
+  );
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
@@ -84,6 +175,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Device> devices = [];
   List<Map<String, dynamic>> pending = [];
   bool busy = false;
+  Map<String, bool> _vmBusy = {};
   Timer? timer;
   bool appLock = false;
   bool unlocked = true;
@@ -356,8 +448,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> vmCommand(Device host, Vm vm, String action) async {
     final c = client;
     if (c == null) return;
+    final key = '${host.id}/${vm.id}';
+    setState(() => _vmBusy[key] = true);
     final label = action == 'power_on' ? 'تشغيل' : action == 'reboot_guest' ? 'إعادة تشغيل آمنة' : 'إيقاف آمن';
-    if (!await confirm('تأكيد أمر', 'هل تريد $label ${vm.name} على ${host.name}؟')) return;
+    bool confirmed = false;
+    try {
+      confirmed = await confirm('تأكيد أمر', 'هل تريد $label ${vm.name} على ${host.name}؟');
+    } finally {
+      if (!confirmed && mounted) setState(() => _vmBusy[key] = false);
+    }
+    if (!confirmed) return;
     try {
       final r = await c.post('/devices/${host.id}/vms/${Uri.encodeComponent(vm.id)}/command', {'action': action, 'confirm': true});
       if (r.statusCode >= 400) throw Exception('HTTP ${r.statusCode}: ${r.body}');
@@ -366,6 +466,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await refresh();
     } catch (e) {
       toast('$e');
+    } finally {
+      if (mounted) setState(() => _vmBusy[key] = false);
     }
   }
 
@@ -395,28 +497,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           if (d.detail.isNotEmpty) Padding(padding: const EdgeInsets.all(8), child: Text(d.detail, style: const TextStyle(fontSize: 11, color: Colors.grey))),
           if (d.pending) const Padding(padding: EdgeInsets.all(8), child: Text('جهاز معلق: سيتم مزامنته عند توفر بوابة الإدارة', style: TextStyle(color: Colors.amber))),
-          ...vms.map((vm) => ListTile(
-                leading: Icon(Icons.computer, color: vm.state == 'on' ? Colors.greenAccent : vm.state == 'off' ? Colors.redAccent : Colors.amberAccent),
-                title: Text(vm.name),
-                subtitle: Text('${vm.guest} · ${vm.state} · Tools: ${vm.tools}'),
-                trailing: Wrap(spacing: 6, children: [
-                  if (vm.state == 'off')
-                    FilledButton.icon(onPressed: () => vmCommand(d, vm, 'power_on'), icon: const Icon(Icons.power_settings_new), label: const Text('تشغيل')),
-                  if (vm.state == 'on') ...[
-                    OutlinedButton.icon(
-                      onPressed: vm.tools == 'guestToolsRunning' ? () => vmCommand(d, vm, 'reboot_guest') : null,
-                      icon: const Icon(Icons.restart_alt),
-                      label: const Text('إعادة تشغيل'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: vm.tools == 'guestToolsRunning' ? () => vmCommand(d, vm, 'shutdown_guest') : null,
-                      icon: const Icon(Icons.power_off),
-                      label: const Text('إيقاف آمن'),
-                    ),
-                    if (vm.tools != 'guestToolsRunning')
-                      const Padding(padding: EdgeInsets.only(top: 4), child: Text('VMware Tools غير متاح: إعادة التشغيل/الإيقاف الآمن معطل', style: TextStyle(fontSize: 11, color: Colors.amber))),
-                  ],
-                ]),
+          ...vms.map((vm) => vmCard(
+                d,
+                vm,
+                busy: _vmBusy['${d.id}/${vm.id}'] == true,
+                onCommand: vmCommand,
               )),
           if (d.kind == 'esxi' && vms.isEmpty && !d.pending)
             const ListTile(title: Text('لا توجد VMs — تحقق من الاتصال وشهادة CA')),
