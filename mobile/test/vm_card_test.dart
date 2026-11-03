@@ -24,10 +24,10 @@ Future<void> pumpCard(
   bool busy = false,
   Future<void> Function(Device, Vm, String)? onCommand,
 }) async {
-  await tester.pumpWidget(Directionality(
-    textDirection: TextDirection.rtl,
-    child: MaterialApp(
-      home: Scaffold(
+  await tester.pumpWidget(MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
         body: vmCard(_host(), vm, busy: busy, onCommand: onCommand ?? (_, __, ___) async {}),
       ),
     ),
