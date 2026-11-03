@@ -1,11 +1,16 @@
 """NCC controller. Run only on private VPN; never expose directly to public Internet."""
-import os, json, uuid, socket, sqlite3, ssl, hmac, ipaddress, urllib.request, urllib.error
+import os, json, uuid, socket, sqlite3, ssl, hmac, ipaddress, threading, time, urllib.request, urllib.error
 from pathlib import Path
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from cryptography.fernet import Fernet
+
+try:
+    from pyVmomi import vim as _vmomi_vim
+except Exception:
+    _vmomi_vim = None
 
 DB = Path(os.environ.get('NCC_DB', 'ncc.sqlite3'))
 KEY = os.environ.get('NCC_API_KEY', '')
@@ -16,6 +21,32 @@ crypt = Fernet(FERNET_KEY.encode())
 app = FastAPI(title='Network Control Center', docs_url=None, redoc_url=None)
 
 VERSION = '2.0.0'
+
+_VM_COMMAND_LOCKS = {}
+_VM_COMMAND_LOCKS_GUARD = threading.Lock()
+
+def _vm_command_lock(device_id, vm_id):
+    key = f'{device_id}/{vm_id}'
+    with _VM_COMMAND_LOCKS_GUARD:
+        lock = _VM_COMMAND_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _VM_COMMAND_LOCKS[key] = lock
+        return lock
+
+def _wait_for_task(si, task, timeout=60):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        info = getattr(task, 'info', None)
+        state = str(getattr(info, 'state', '') or '')
+        if state == 'success':
+            return True
+        if state == 'error':
+            err = getattr(info, 'error', None)
+            msg = getattr(err, 'msg', 'VMware task failed') if err is not None else 'VMware task failed'
+            return str(msg)
+        time.sleep(1)
+    return None
 
 def now():
     return datetime.now(timezone.utc).isoformat()
@@ -109,14 +140,75 @@ def ssl_context(ca_file=''):
 def esxi(d):
     if d.get('kind') and d['kind'] != 'esxi':
         raise RuntimeError('Device is not an ESXi host')
+
+    import hashlib
     from pyVim.connect import SmartConnect, Disconnect
     from pyVmomi import vim
-    cafile = d.get('ca_file') or ''
-    if not cafile or not Path(cafile).is_file():
-        raise RuntimeError('ESXi CA certificate file is not configured on the controller')
-    ctx = ssl.create_default_context(cafile=cafile)
-    si = SmartConnect(host=d['host'], user=dec(d['username']), pwd=dec(d['password']),
-                      port=d['port'], sslContext=ctx, connectionPoolTimeout=5)
+
+    host = str(d['host']).strip().lower().rstrip('.')
+    port = int(d['port'])
+
+    pinned_hosts = {
+        '172.16.1.230': (
+            r'F:\NCC\certs\esxi01-current-pinned.crt',
+            'e2839d7f980e3cf48770a32f24e685a'
+            '4275636ab10098f40e43164c4de880ee3'
+        ),
+        'esxi01.almanarschool.net': (
+            r'F:\NCC\certs\esxi01-current-pinned.crt',
+            'e2839d7f980e3cf48770a32f24e685a'
+            '4275636ab10098f40e43164c4de880ee3'
+        ),
+        '172.16.1.220': (
+            r'F:\NCC\certs\esxi02-current-pinned.crt',
+            '46bd0d1f56238d39231573e450e89da9'
+            '8d2f5f8643da921645f266fcf7f862e8'
+        )
+    }
+
+    extra = {}
+
+    if host in pinned_hosts and port == 443:
+        cert_path, expected_hash = pinned_hosts[host]
+        cert_file = Path(cert_path)
+
+        if not cert_file.is_file():
+            raise RuntimeError('Pinned ESXi certificate missing')
+
+        pem = cert_file.read_text(encoding='ascii')
+        der = ssl.PEM_cert_to_DER_cert(pem)
+
+        actual_hash = hashlib.sha256(der).hexdigest()
+
+        if actual_hash != expected_hash:
+            raise RuntimeError('ESXi certificate pin mismatch')
+
+        ctx = ssl.create_default_context(cafile=str(cert_file))
+        ctx.check_hostname = False
+        ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+
+        extra['serverPemCert'] = pem
+
+    else:
+        cafile = d.get('ca_file') or ''
+
+        if not cafile or not Path(cafile).is_file():
+            raise RuntimeError(
+                'ESXi CA certificate file is not configured'
+            )
+
+        ctx = ssl.create_default_context(cafile=cafile)
+
+    si = SmartConnect(
+        host=host,
+        user=dec(d['username']),
+        pwd=dec(d['password']),
+        port=port,
+        sslContext=ctx,
+        connectionPoolTimeout=5,
+        **extra
+    )
+
     try:
         yield si, vim
     finally:
@@ -141,7 +233,7 @@ def vm_list(d):
                 out.append({
                     'id': vm._moId,
                     'name': vm.name,
-                    'state': 'on' if power == 'poweredOn' else 'off' if power == 'poweredOff' else 'unknown',
+                    'state': 'on' if power == 'poweredOn' else 'off' if power == 'poweredOff' else 'suspended' if power == 'suspended' else 'unknown',
                     'guest': vm.config.guestFullName or '',
                     'tools': tools,
                 })
@@ -377,6 +469,10 @@ def vm_command(device_id: str, vm_id: str, cmd: Command, x_api_key: str | None =
     d = get_device(device_id)
     if d is None or d['kind'] != 'esxi':
         raise HTTPException(404, 'ESXi host not found')
+    lock = _vm_command_lock(device_id, vm_id)
+    if not lock.acquire(blocking=False):
+        audit(cmd.action, f'{device_id}/{vm_id}', 'conflict', 'command already in progress')
+        raise HTTPException(409, 'A command for this VM is already in progress')
     try:
         with esxi(d) as (si, vim):
             content = si.RetrieveContent()
@@ -396,8 +492,23 @@ def vm_command(device_id: str, vm_id: str, cmd: Command, x_api_key: str | None =
             if cmd.action == 'power_on':
                 if state != 'poweredOff':
                     raise HTTPException(409, 'VM is not powered off')
-                task = vm.PowerOnVM_Task()
-                result = f'Power on task submitted ({task._moId})'
+                try:
+                    task = vm.PowerOnVM_Task()
+                except Exception as e:
+                    if _vmomi_vim is not None and isinstance(e, _vmomi_vim.fault.VimFault):
+                        detail = getattr(e, 'msg', 'VMware fault')
+                        audit(cmd.action, f'{device_id}/{vm_id}', 'failed', str(detail)[:180])
+                        raise HTTPException(502, f'Power on failed: {detail[:180]}')
+                    raise
+                outcome = _wait_for_task(si, task)
+                if outcome is True:
+                    result = f'Powered on (task {str(getattr(task, "_moId", ""))})'
+                elif outcome is None:
+                    audit(cmd.action, f'{device_id}/{vm_id}', 'timeout', f'task {str(getattr(task, "_moId", ""))}')
+                    raise HTTPException(504, 'Power on task did not complete in time')
+                else:
+                    audit(cmd.action, f'{device_id}/{vm_id}', 'failed', str(outcome)[:180])
+                    raise HTTPException(502, f'Power on failed: {str(outcome)[:180]}')
             elif cmd.action == 'reboot_guest':
                 if state != 'poweredOn':
                     raise HTTPException(409, 'VM is not powered on')
@@ -409,7 +520,7 @@ def vm_command(device_id: str, vm_id: str, cmd: Command, x_api_key: str | None =
                 if state != 'poweredOn':
                     raise HTTPException(409, 'VM is not powered on')
                 if tools != 'guestToolsRunning':
-                    raise HTTPException(409, 'VMware Tools is not running; graceful shutdown is unavailable')
+                    raise HTTPException(409, 'VMware Tools is not running; graceful guest shutdown is unavailable')
                 vm.ShutdownGuest()
                 result = 'Graceful guest shutdown requested'
             else:
@@ -417,8 +528,15 @@ def vm_command(device_id: str, vm_id: str, cmd: Command, x_api_key: str | None =
     except HTTPException:
         raise
     except Exception as e:
+        if _vmomi_vim is not None and isinstance(e, _vmomi_vim.fault.VimFault):
+            detail = getattr(e, 'msg', 'VMware fault')
+            audit(cmd.action, f'{device_id}/{vm_id}', 'failed', str(detail)[:180])
+            raise HTTPException(502, f'ESXi operation failed: {str(detail)[:180]}')
+        audit(cmd.action, f'{device_id}/{vm_id}', 'failed', str(e)[:180])
         raise HTTPException(502, f'ESXi operation failed: {str(e)[:180]}')
-    audit(cmd.action, f'{device_id}/{vm_id}', 'ok', '')
+    finally:
+        lock.release()
+    audit(cmd.action, f'{device_id}/{vm_id}', 'ok', result[:200])
     return {'ok': True, 'message': result}
 
 @app.post('/devices/{device_id}/restart')
