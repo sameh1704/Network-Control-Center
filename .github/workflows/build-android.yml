@@ -45,6 +45,11 @@ jobs:
       - name: Build release APK
         working-directory: mobile
         run: flutter build apk --release
+      - name: Upload diagnostic APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NCC_V3_Diagnostic_APK
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
       - name: Download installed-release reference APK
         uses: actions/download-artifact@v4
         with:
@@ -107,8 +112,3 @@ jobs:
             echo 'Release versionCode must be higher than the installed-release reference.' >&2
             exit 1
           fi
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Network_Control_Center_V3_APK
-          path: mobile/build/app/outputs/flutter-apk/app-release.apk
