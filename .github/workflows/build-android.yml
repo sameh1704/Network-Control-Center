@@ -32,7 +32,14 @@ jobs:
           cp "$RUNNER_TEMP/ncc-android-wrapper/android/gradlew" mobile/android/gradlew
           cp "$RUNNER_TEMP/ncc-android-wrapper/android/gradle/wrapper/gradle-wrapper.jar" mobile/android/gradle/wrapper/gradle-wrapper.jar
           chmod +x mobile/android/gradlew
-      - name: Build release APK
+      
+      - name: Check INTERNET permission in main manifest
+        run: |
+          if ! grep -q 'android.permission.INTERNET' mobile/android/app/src/main/AndroidManifest.xml; then
+            echo 'INTERNET permission missing from main manifest' >&2
+            exit 1
+          fi
+
         working-directory: mobile
         run: flutter build apk --release
       - name: Download installed-release reference APK
