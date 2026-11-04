@@ -34,12 +34,15 @@ jobs:
           chmod +x mobile/android/gradlew
       
       - name: Check INTERNET permission in main manifest
+        working-directory: mobile
         run: |
-          if ! grep -q 'android.permission.INTERNET' mobile/android/app/src/main/AndroidManifest.xml; then
+          if ! grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml; then
             echo 'INTERNET permission missing from main manifest' >&2
             exit 1
           fi
+          echo 'PASS: INTERNET permission exists in main manifest'
 
+      - name: Build release APK
         working-directory: mobile
         run: flutter build apk --release
       - name: Download installed-release reference APK
