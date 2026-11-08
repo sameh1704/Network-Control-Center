@@ -13,7 +13,7 @@ class NccApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
         title: 'مركز التحكم بالشبكة',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true, brightness: Brightness.dark),
+        theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true, brightness: Brightness.dark, fontFamily: 'NotoSansArabic'),
         builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
         home: const DashboardScreen(),
       );

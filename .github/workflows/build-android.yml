@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -22,6 +23,8 @@ jobs:
         run: |
           cp mobile/lib/main.dart app/lib/main.dart
           cp mobile/pubspec.yaml app/pubspec.yaml
+          if [ -d mobile/test ]; then rm -rf app/test; mkdir -p app/test; cp mobile/test/*.dart app/test/; fi
+          if [ -d mobile/assets ]; then cp -r mobile/assets app/assets; fi
           python3 - <<'PY'
           from pathlib import Path
           f=Path('app/android/app/src/main/AndroidManifest.xml')
@@ -36,11 +39,22 @@ jobs:
       - name: Validate Dart code
         working-directory: app
         run: flutter analyze lib/main.dart
-      - name: Build installable APK
+      - name: Run Flutter tests
+        working-directory: app
+        run: flutter test
+      - name: Build release APK
         working-directory: app
         run: flutter build apk --release
-      - name: Upload APK
+      - name: Upload diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: Network_Control_Center_V3_APK
+          name: NCC_V3_Arabic_Fixed_APK
           path: app/build/app/outputs/flutter-apk/app-release.apk
+      - name: Verify APK signature
+        working-directory: app
+        run: |
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          build_tools="$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          apksigner="$build_tools/apksigner"
+          test -x "$apksigner"
+          "$apksigner" verify --verbose app/build/app/outputs/flutter-apk/app-release.apk
