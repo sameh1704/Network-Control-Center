@@ -57,4 +57,4 @@ jobs:
           build_tools="$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
           apksigner="$build_tools/apksigner"
           test -x "$apksigner"
-          "$apksigner" verify --verbose app/build/app/outputs/flutter-apk/app-release.apk
+          "$apksigner" verify --verbose build/app/outputs/flutter-apk/app-release.apk
