@@ -39,8 +39,7 @@ jobs:
           gradle-version: wrapper
       - name: Use Gradle services mirror
         working-directory: app
-        run: |
-          sed -i 's#https\\://github.com/gradle/gradle-distributions/releases/download/v9.3.1/gradle-9.3.1-all.zip#https://services.gradle.org/distributions/gradle-9.3.1-all.zip#' android/gradle/wrapper/gradle-wrapper.properties
+        run: python3 -c "from pathlib import Path; p=Path('android/gradle/wrapper/gradle-wrapper.properties'); s=p.read_text(); s=s.replace('https\\://github.com/gradle/gradle-distributions/releases/download/v9.3.1/gradle-9.3.1-all.zip','https://services.gradle.org/distributions/gradle-9.3.1-all.zip'); p.write_text(s)" 
       - name: Fetch dependencies
         working-directory: app
         run: flutter pub get
