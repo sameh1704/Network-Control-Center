@@ -33,13 +33,14 @@ jobs:
               s=s.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
           f.write_text(s)
           PY
+      - name: Use Gradle services mirror
+        working-directory: app
+        run: python3 -c "import pathlib; p=pathlib.Path('android/gradle/wrapper/gradle-wrapper.properties'); lines=p.read_text().splitlines(); lines=['distributionUrl=https://services.gradle.org/distributions/gradle-9.3.1-all.zip' if x.startswith('distributionUrl=') else x for x in lines]; p.write_text(chr(10).join(lines)+chr(10))"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: wrapper
-      - name: Use Gradle services mirror
-        working-directory: app
-        run: python3 -c "import pathlib; p=pathlib.Path('android/gradle/wrapper/gradle-wrapper.properties'); lines=p.read_text().splitlines(); lines=['distributionUrl=https://services.gradle.org/distributions/gradle-9.3.1-all.zip' if x.startswith('distributionUrl=') else x for x in lines]; p.write_text(chr(10).join(lines)+chr(10))" 
+          gradle-version: wrapper 
       - name: Fetch dependencies
         working-directory: app
         run: flutter pub get
