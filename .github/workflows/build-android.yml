@@ -37,6 +37,10 @@ jobs:
         working-directory: app
         run: python3 -c "import pathlib; p=pathlib.Path('android/gradle/wrapper/gradle-wrapper.properties'); lines=p.read_text().splitlines(); lines=['distributionUrl=https://services.gradle.org/distributions/gradle-9.3.1-all.zip' if x.startswith('distributionUrl=') else x for x in lines]; p.write_text(chr(10).join(lines)+chr(10))"
 
+      - name: Show Gradle wrapper URL
+        working-directory: app
+        run: cat android/gradle/wrapper/gradle-wrapper.properties
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
