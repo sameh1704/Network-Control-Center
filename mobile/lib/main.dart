@@ -416,22 +416,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 device: d,
                 onCommand: vmCommand,
               )),
-                  if (vm.state == 'on') ...[
-                    OutlinedButton.icon(
-                      onPressed: vm.tools == 'guestToolsRunning' ? () => vmCommand(d, vm, 'reboot_guest') : null,
-                      icon: const Icon(Icons.restart_alt),
-                      label: const Text('إعادة تشغيل'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: vm.tools == 'guestToolsRunning' ? () => vmCommand(d, vm, 'shutdown_guest') : null,
-                      icon: const Icon(Icons.power_off),
-                      label: const Text('إيقاف آمن'),
-                    ),
-                    if (vm.tools != 'guestToolsRunning')
-                      const Padding(padding: EdgeInsets.only(top: 4), child: Text('VMware Tools غير متاح: إعادة التشغيل/الإيقاف الآمن معطل', style: TextStyle(fontSize: 11, color: Colors.amber))),
-                  ],
-                ]),
-              )),
           if (d.kind == 'esxi' && vms.isEmpty && !d.pending)
             const ListTile(title: Text('لا توجد VMs — تحقق من الاتصال وشهادة CA')),
           if (d.kind == 'fortigate')
