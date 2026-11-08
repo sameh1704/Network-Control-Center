@@ -63,6 +63,8 @@ jobs:
         working-directory: app
         run: |
           set -o pipefail
+          echo "=== gradle-wrapper.properties before build ==="
+          cat android/gradle/wrapper/gradle-wrapper.properties
           for attempt in 1 2 3; do
             if [ "$attempt" -gt 1 ]; then
               if [ "$attempt" -eq 2 ]; then sleep 20; else sleep 45; fi
