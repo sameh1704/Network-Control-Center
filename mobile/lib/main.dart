@@ -411,13 +411,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           if (d.detail.isNotEmpty) Padding(padding: const EdgeInsets.all(8), child: Text(d.detail, style: const TextStyle(fontSize: 11, color: Colors.grey))),
           if (d.pending) const Padding(padding: EdgeInsets.all(8), child: Text('جهاز معلق: سيتم مزامنته عند توفر بوابة الإدارة', style: TextStyle(color: Colors.amber))),
-          ...vms.map((vm) => ListTile(
-                leading: Icon(Icons.computer, color: vm.state == 'on' ? Colors.greenAccent : vm.state == 'off' ? Colors.redAccent : Colors.amberAccent),
-                title: Text(vm.name),
-                subtitle: Text('${vm.guest} · ${vm.state} · Tools: ${vm.tools}'),
-                trailing: Wrap(spacing: 6, children: [
-                  if (vm.state == 'off')
-                    FilledButton.icon(onPressed: () => vmCommand(d, vm, 'power_on'), icon: const Icon(Icons.power_settings_new), label: const Text('تشغيل')),
+          ...vms.map((vm) => VmTile(
+                vm: vm,
+                device: d,
+                onCommand: vmCommand,
+              )),
                   if (vm.state == 'on') ...[
                     OutlinedButton.icon(
                       onPressed: vm.tools == 'guestToolsRunning' ? () => vmCommand(d, vm, 'reboot_guest') : null,
@@ -764,6 +762,88 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 title: Text('${e['action']} — ${e['result']}'),
                 subtitle: Text('${e['target']} · ${e['at']}'),
               )),
+        ],
+      ),
+    );
+  }
+}
+
+class VmTile extends StatelessWidget {
+  final Vm vm;
+  final Device device;
+  final void Function(Device, Vm, String) onCommand;
+  const VmTile({super.key, required this.vm, required this.device, required this.onCommand});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = vm.state == 'on'
+        ? Colors.greenAccent
+        : vm.state == 'off'
+            ? Colors.redAccent
+            : Colors.amberAccent;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.computer, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      vm.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${vm.guest} · ${vm.state} · Tools: ${vm.tools}',
+                      textDirection: TextDirection.ltr,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              if (vm.state == 'off')
+                FilledButton.icon(
+                  onPressed: () => onCommand(device, vm, 'power_on'),
+                  icon: const Icon(Icons.power_settings_new),
+                  label: const Text('تشغيل'),
+                ),
+              if (vm.state == 'on') ...[
+                OutlinedButton.icon(
+                  onPressed: vm.tools == 'guestToolsRunning' ? () => onCommand(device, vm, 'reboot_guest') : null,
+                  icon: const Icon(Icons.restart_alt),
+                  label: const Text('إعادة تشغيل'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: vm.tools == 'guestToolsRunning' ? () => onCommand(device, vm, 'shutdown_guest') : null,
+                  icon: const Icon(Icons.power_off),
+                  label: const Text('إيقاف آمن'),
+                ),
+                if (vm.tools != 'guestToolsRunning')
+                  const Text(
+                    'VMware Tools غير متاح: إعادة التشغيل/الإيقاف الآمن معطل',
+                    style: TextStyle(fontSize: 11, color: Colors.amber),
+                  ),
+              ],
+            ],
+          ),
         ],
       ),
     );

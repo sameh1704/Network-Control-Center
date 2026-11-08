@@ -48,7 +48,7 @@ jobs:
       - name: Upload diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: NCC_V3_DeviceRegistration_Fixed_APK
+          name: NCC_V3_VM_Responsive_UI_Fixed_APK
           path: app/build/app/outputs/flutter-apk/app-release.apk
       - name: Verify APK signature
         working-directory: app
