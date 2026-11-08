@@ -59,14 +59,30 @@ class ApiClient {
   ApiClient(this.baseUrl, this.token);
   Uri _uri(String path) => Uri.parse('${baseUrl.replaceAll(RegExp(r'/$'), '')}$path');
   Map<String, String> _headers() => {'X-API-Key': token, 'Content-Type': 'application/json'};
-  Future<http.Response> get(String path) => http.get(_uri(path), headers: _headers()).timeout(const Duration(seconds: 20));
-  Future<http.Response> post(String path, [Object? payload]) => http
-      .post(_uri(path), headers: _headers(), body: payload == null ? null : jsonEncode(payload))
-      .timeout(const Duration(seconds: 20));
-  Future<http.Response> put(String path, Object? payload) => http
-      .put(_uri(path), headers: _headers(), body: jsonEncode(payload))
-      .timeout(const Duration(seconds: 20));
-  Future<http.Response> delete(String path) => http.delete(_uri(path), headers: _headers()).timeout(const Duration(seconds: 20));
+  Future<http.Response> get(String path) async {
+    final uri = _uri(path);
+    final r = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 20));
+    debugPrint('NCC API GET  ->  allow= body=');
+    return r;
+  }
+  Future<http.Response> post(String path, [Object? payload]) async {
+    final uri = _uri(path);
+    final r = await http.post(uri, headers: _headers(), body: payload == null ? null : jsonEncode(payload)).timeout(const Duration(seconds: 20));
+    debugPrint('NCC API POST  ->  allow= body=');
+    return r;
+  }
+  Future<http.Response> put(String path, Object? payload) async {
+    final uri = _uri(path);
+    final r = await http.put(uri, headers: _headers(), body: jsonEncode(payload)).timeout(const Duration(seconds: 20));
+    debugPrint('NCC API PUT  ->  allow= body=');
+    return r;
+  }
+  Future<http.Response> delete(String path) async {
+    final uri = _uri(path);
+    final r = await http.delete(uri, headers: _headers()).timeout(const Duration(seconds: 20));
+    debugPrint('NCC API DELETE  ->  allow= body=');
+    return r;
+  }
 }
 
 class DashboardScreen extends StatefulWidget {

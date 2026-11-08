@@ -3,7 +3,7 @@ import os, json, uuid, socket, sqlite3, ssl, hmac, ipaddress, urllib.request, ur
 from pathlib import Path
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel, Field
 from cryptography.fernet import Fernet
 
@@ -264,6 +264,10 @@ def to_record_dict(row):
 def health(x_api_key: str | None = Header(default=None)):
     auth(x_api_key)
     return {'ok': True, 'version': VERSION, 'time': now()}
+
+@app.options('/devices')
+def devices_options():
+    return Response(status_code=204, headers={'Allow': 'GET, POST, OPTIONS'})
 
 @app.get('/devices')
 def devices(x_api_key: str | None = Header(default=None)):
